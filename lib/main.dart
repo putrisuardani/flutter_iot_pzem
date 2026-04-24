@@ -30,7 +30,9 @@ class _MqttPageState extends State<MqttPage> {
   double power = 0;
   double energy = 0;
 
-  List<FlSpot> powerSpots = [];
+  String selectedMetric = "Power";
+
+  List<FlSpot> chartData = [];
   int xIndex = 0;
 
   @override
@@ -56,7 +58,6 @@ class _MqttPageState extends State<MqttPage> {
 
     try {
       await client.connect();
-      debugPrint("MQTT Connected");
     } catch (e) {
       debugPrint("Failed: $e");
       return;
@@ -79,27 +80,56 @@ class _MqttPageState extends State<MqttPage> {
         power = (data['power'] ?? 0).toDouble();
         energy = (data['energy'] ?? 0).toDouble();
 
-        powerSpots.add(FlSpot(xIndex.toDouble(), power));
+        double value = getSelectedValue();
+
+        chartData.add(FlSpot(xIndex.toDouble(), value));
         xIndex++;
 
-        if (powerSpots.length > 20) {
-          powerSpots.removeAt(0);
+        if (chartData.length > 20) {
+          chartData.removeAt(0);
         }
       });
     });
   }
 
+  double getSelectedValue() {
+    switch (selectedMetric) {
+      case "Voltage":
+        return voltage;
+      case "Current":
+        return current;
+      case "Energy":
+        return energy;
+      default:
+        return power;
+    }
+  }
+
+  String getUnit() {
+    switch (selectedMetric) {
+      case "Voltage":
+        return "V";
+      case "Current":
+        return "A";
+      case "Energy":
+        return "kWh";
+      default:
+        return "W";
+    }
+  }
+
   Widget infoCard(String title, String value, String unit) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(title, style: TextStyle(fontSize: 14)),
-            SizedBox(height: 8),
+            Text(title),
+            const SizedBox(height: 8),
             Text(
               "$value $unit",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -108,23 +138,20 @@ class _MqttPageState extends State<MqttPage> {
   }
 
   Widget buildChart() {
-    return SizedBox(
-      height: 250,
-      child: LineChart(
-        LineChartData(
-          minY: 0,
-          gridData: FlGridData(show: true),
-          borderData: FlBorderData(show: true),
-          titlesData: FlTitlesData(show: true),
-          lineBarsData: [
-            LineChartBarData(
-              isCurved: true,
-              spots: powerSpots,
-              dotData: FlDotData(show: false),
-              barWidth: 3,
-            ),
-          ],
-        ),
+    return LineChart(
+      LineChartData(
+        minY: 0,
+        gridData: FlGridData(show: true),
+        borderData: FlBorderData(show: true),
+        titlesData: FlTitlesData(show: true),
+        lineBarsData: [
+          LineChartBarData(
+            spots: chartData,
+            isCurved: true,
+            barWidth: 3,
+            dotData: FlDotData(show: false),
+          ),
+        ],
       ),
     );
   }
@@ -138,16 +165,16 @@ class _MqttPageState extends State<MqttPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("MQTT Power Monitor"), centerTitle: true),
+      appBar: AppBar(title: const Text("MQTT Monitoring"), centerTitle: true),
       body: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
             GridView.count(
               crossAxisCount: 2,
+              childAspectRatio: 1.5,
               shrinkWrap: true,
-              childAspectRatio: 1.6,
-              physics: NeverScrollableScrollPhysics(),
+              physics: const NeverScrollableScrollPhysics(),
               children: [
                 infoCard("Voltage", voltage.toStringAsFixed(1), "V"),
                 infoCard("Current", current.toStringAsFixed(2), "A"),
@@ -155,13 +182,45 @@ class _MqttPageState extends State<MqttPage> {
                 infoCard("Energy", energy.toStringAsFixed(2), "kWh"),
               ],
             ),
-            SizedBox(height: 20),
-            Text(
-              "Realtime Power Graph",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+
+            const SizedBox(height: 18),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  "Realtime Graph",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                DropdownButton<String>(
+                  value: selectedMetric,
+                  items: const [
+                    DropdownMenuItem(value: "Power", child: Text("Power")),
+                    DropdownMenuItem(value: "Voltage", child: Text("Voltage")),
+                    DropdownMenuItem(value: "Current", child: Text("Current")),
+                    DropdownMenuItem(value: "Energy", child: Text("Energy")),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      selectedMetric = value!;
+                      chartData.clear();
+                      xIndex = 0;
+                    });
+                  },
+                ),
+              ],
             ),
-            SizedBox(height: 12),
+
+            const SizedBox(height: 12),
+
             Expanded(child: buildChart()),
+
+            const SizedBox(height: 10),
+
+            Text(
+              "Showing: $selectedMetric (${getUnit()})",
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
           ],
         ),
       ),

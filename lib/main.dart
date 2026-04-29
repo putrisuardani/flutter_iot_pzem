@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'package:fl_chart/fl_chart.dart';
+import 'mqtt_factory.dart';
 import 'package:flutter/material.dart';
 import 'package:mqtt_client/mqtt_client.dart';
-import 'package:mqtt_client/mqtt_server_client.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 void main() {
   runApp(const MainApp());
@@ -13,17 +13,22 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(debugShowCheckedModeBanner: false, home: MqttPage());
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: const MqttPage(),
+    );
   }
 }
 
 class MqttPage extends StatefulWidget {
+  const MqttPage({super.key});
+
   @override
   State<MqttPage> createState() => _MqttPageState();
 }
 
 class _MqttPageState extends State<MqttPage> {
-  late MqttServerClient client;
+  late MqttClient client;
 
   double voltage = 0;
   double current = 0;
@@ -42,22 +47,23 @@ class _MqttPageState extends State<MqttPage> {
   }
 
   Future<void> connectMQTT() async {
-    client = MqttServerClient(
+    final clientId = 'flutter_${DateTime.now().millisecondsSinceEpoch}';
+
+    client = createClient(
       '94a3a8628a2940f3a97c37538f50b219.s1.eu.hivemq.cloud',
-      'flutter_client',
+      clientId,
     );
 
-    client.port = 8883;
-    client.secure = true;
     client.keepAlivePeriod = 20;
 
     client.connectionMessage = MqttConnectMessage()
         .authenticateAs('freeAkses1', 'freeAkses1')
-        .withClientIdentifier('flutter_client')
+        .withClientIdentifier(clientId)
         .startClean();
 
     try {
       await client.connect();
+      debugPrint("MQTT Connected");
     } catch (e) {
       debugPrint("Failed: $e");
       return;
@@ -166,62 +172,70 @@ class _MqttPageState extends State<MqttPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("MQTT Monitoring"), centerTitle: true),
-      body: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            GridView.count(
-              crossAxisCount: 2,
-              childAspectRatio: 1.5,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                infoCard("Voltage", voltage.toStringAsFixed(1), "V"),
-                infoCard("Current", current.toStringAsFixed(2), "A"),
-                infoCard("Power", power.toStringAsFixed(1), "W"),
-                infoCard("Energy", energy.toStringAsFixed(2), "kWh"),
-              ],
-            ),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+              GridView.count(
+                crossAxisCount: MediaQuery.of(context).size.width > 800 ? 4 : 2,
+                childAspectRatio: 1.5,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  infoCard("Voltage", voltage.toStringAsFixed(1), "V"),
+                  infoCard("Current", current.toStringAsFixed(2), "A"),
+                  infoCard("Power", power.toStringAsFixed(1), "W"),
+                  infoCard("Energy", energy.toStringAsFixed(2), "kWh"),
+                ],
+              ),
 
-            const SizedBox(height: 18),
+              const SizedBox(height: 18),
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  "Realtime Graph",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                DropdownButton<String>(
-                  value: selectedMetric,
-                  items: const [
-                    DropdownMenuItem(value: "Power", child: Text("Power")),
-                    DropdownMenuItem(value: "Voltage", child: Text("Voltage")),
-                    DropdownMenuItem(value: "Current", child: Text("Current")),
-                    DropdownMenuItem(value: "Energy", child: Text("Energy")),
-                  ],
-                  onChanged: (value) {
-                    setState(() {
-                      selectedMetric = value!;
-                      chartData.clear();
-                      xIndex = 0;
-                    });
-                  },
-                ),
-              ],
-            ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "Realtime Graph",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  DropdownButton<String>(
+                    value: selectedMetric,
+                    items: const [
+                      DropdownMenuItem(value: "Power", child: Text("Power")),
+                      DropdownMenuItem(
+                        value: "Voltage",
+                        child: Text("Voltage"),
+                      ),
+                      DropdownMenuItem(
+                        value: "Current",
+                        child: Text("Current"),
+                      ),
+                      DropdownMenuItem(value: "Energy", child: Text("Energy")),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        selectedMetric = value!;
+                        chartData.clear();
+                        xIndex = 0;
+                      });
+                    },
+                  ),
+                ],
+              ),
 
-            const SizedBox(height: 12),
+              const SizedBox(height: 12),
 
-            Expanded(child: buildChart()),
+              SizedBox(height: 300, child: buildChart()),
 
-            const SizedBox(height: 10),
+              const SizedBox(height: 10),
 
-            Text(
-              "Showing: $selectedMetric (${getUnit()})",
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-          ],
+              Text(
+                "Showing: $selectedMetric (${getUnit()})",
+                style: const TextStyle(fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
         ),
       ),
     );

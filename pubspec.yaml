@@ -7,10 +7,10 @@ environment:
   sdk: ^3.11.3
 
 dependencies:
-  fl_chart: ^1.2.0
   flutter:
     sdk: flutter
-  mqtt_client: ^10.11.10
+  fl_chart: ^1.2.0
+  mqtt_client: ^10.11.11
 
 dev_dependencies:
   flutter_test:
